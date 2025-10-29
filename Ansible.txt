@@ -1,0 +1,94 @@
+devops.yml(Ansible Playbook - Builds and pushes the Docker image to Docker Hub)
+
+---
+- hosts: ansible
+
+  tasks:
+    - name: clone repository
+      git:
+        repo: https://github.com/Prabhu4205/Devops.git
+        dest: /opt/docker/devops
+        clone: yes
+        update: yes
+
+    - name: create docker image
+      command: docker build -t devops:latest /opt/docker/devops
+      args:
+        chdir: /opt/docker/
+
+    - name: create tag to push image onto dockerhub
+      command: docker tag devops:latest prabhat1184/devops:latest
+
+    - name: push docker image
+      command: docker push prabhat1184/devops:latest
+
+
+kubernetes-deploy.yml(Ansible Playbook - Deploys and updates the application on the Kubernetes cluster)
+
+---
+- hosts: kubernetes
+  user: root
+
+  tasks:
+    - name: deploy devops-app on kubernetes
+      command: kubectl apply -f devops-deployment.yml
+
+    - name: create service for cafeapp
+      command: kubectl apply -f devops.yml
+
+    - name: update deployment with new pods if image updated in docker hub
+      command: kubectl rollout restart deployment.apps/devops-app
+
+
+devops-deployment.yml(Kubernetes Manifest - Defines the deployment configuration for the app)
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: devops-app
+  labels:
+    app: devops
+
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: devops
+
+  template:
+    metadata:
+      labels:
+        app: devops
+    spec:
+      containers:
+      - name: devops
+        image: prabhat1184/devops
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+
+
+devops-service.yml(Kubernetes Manifest - Exposes the app externally using a LoadBalancer service)
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: devops-service
+  labels:
+    app: devops
+
+spec:
+  selector:
+    app: devops
+
+  ports:
+    - port: 80
+      targetPort: 80
+
+  type: LoadBalancer
